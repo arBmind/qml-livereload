@@ -2,35 +2,41 @@
 #include <QFileSystemWatcher>
 #include <QtQuick/QQuickView>
 #include <QDebug>
-#include <QQmlEngine>
+#include <QQmlApplicationEngine>
 #include <QThread>
+#include <QTimer>
+
+#define QML_FILE "./main.qml"
 
 class LiveReload: public QGuiApplication {
     Q_OBJECT
 public:
     LiveReload(int argc, char* argv[]);
-    QQuickView view;
+    QScopedPointer<QQmlApplicationEngine> engine;
     QFileSystemWatcher watcher;
+    QTimer timer;
 private slots:
     void fileChanged(const QString & path) {
         qDebug() << "file changed: " << path;
-        view.engine()->clearComponentCache();
-        QThread::msleep(50);
-        view.setSource(QUrl("./main.qml"));
-        view.show();
+        timer.start();
     };
+    void timeout() {
+        engine.reset(new QQmlApplicationEngine(QUrl(QML_FILE), this));
+    }
 };
 
-LiveReload::LiveReload(int argc, char* argv[]): 
-  QGuiApplication(argc,argv) {
+LiveReload::LiveReload(int argc, char* argv[])
+    : QGuiApplication(argc,argv) {
+    timer.setSingleShot(true);
+    timer.setInterval(50);
+    connect(&timer, SIGNAL(timeout()), this, SLOT(timeout()));
     watcher.addPath("./");
-    watcher.addPath("./main.qml");
-    connect(&watcher, SIGNAL(directoryChanged(const QString &)), 
+    watcher.addPath(QML_FILE);
+    connect(&watcher, SIGNAL(directoryChanged(const QString &)),
       this, SLOT(fileChanged(const QString &)));
-    connect(&watcher, SIGNAL(fileChanged(const QString &)), 
+    connect(&watcher, SIGNAL(fileChanged(const QString &)),
       this, SLOT(fileChanged(const QString &)));
-    view.setSource(QUrl("./main.qml"));
-    view.show();
+    engine.reset(new QQmlApplicationEngine(QUrl(QML_FILE), this));
 }
 
 int main(int argc, char* argv[]) {
